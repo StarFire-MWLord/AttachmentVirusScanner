@@ -121,24 +121,29 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
+    logger.debug("Context menu patch triggered with data:", JSON.stringify(Object.keys(data || {}), null, 2));  // Log keys to see what's available
+
     let attachment: AttachmentType | null = null;
 
+    // Expanded paths for 2026 Discord/Vencord
     if ('attachment' in data && data.attachment) {
         attachment = data.attachment;
-    } else if (data.target && 'props' in data.target && data.target.props?.attachment) {
+    } else if (data.target && data.target.props && data.target.props.attachment) {
         attachment = data.target.props.attachment;
-    } else if ('message' in data && data.message?.attachments?.[0]) {
+    } else if ('message' in data && data.message && data.message.attachments && data.message.attachments[0]) {
         attachment = data.message.attachments[0];
-    } else if (data.target && 'props' in data.target && data.target.props?.message?.attachments?.[0]) {
+    } else if (data.target && data.target.props && data.target.props.message && data.target.props.message.attachments && data.target.props.message.attachments[0]) {
         attachment = data.target.props.message.attachments[0];
+    } else if (data.attachments && data.attachments[0]) {
+        attachment = data.attachments[0];
     }
 
     if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("No valid attachment found");
+        logger.debug("No valid attachment found in context data");
         return;
     }
 
-    logger.debug("Found attachment:", attachment.filename || "unnamed");
+    logger.debug("Found attachment:", attachment.filename || "unnamed", "URL:", attachment.url || attachment.proxy_url);
 
     const children = Array.isArray(menu.props.children)
         ? menu.props.children
@@ -171,11 +176,16 @@ export default definePlugin({
     start() {
         addContextMenuPatch("message", patch);
         addContextMenuPatch("attachment", patch);
-        logger.log("Plugin started – right-click attachments to scan");
+        // Add more patch types for media/file previews
+        addContextMenuPatch("media-actions", patch);
+        addContextMenuPatch("attachment-actions", patch);
+        logger.log("Plugin started – context menu patches applied");
     },
 
     stop() {
         removeContextMenuPatch("message", patch);
         removeContextMenuPatch("attachment", patch);
+        removeContextMenuPatch("media-actions", patch);
+        removeContextMenuPatch("attachment-actions", patch);
     }
 });

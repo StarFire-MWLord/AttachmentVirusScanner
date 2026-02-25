@@ -5,11 +5,11 @@
  */
 
 import { addContextMenuPatch, removeContextMenuPatch, NavContextMenuPatchCallback } from "@api/ContextMenu";
-import { definePluginSettings } from "@api/Settings";  // ← Fixed: named import
+import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { Menu } from "@webpack/common";
 import { openModal } from "@utils/modal";
-import { showToast } from "@utils/toasts";
+import { showToast } from "@utils/notifications";  // ← Fixed import (toasts → notifications)
 import { Logger } from "@utils/Logger";
 
 const logger = new Logger("AttachmentVirusScanner");
@@ -27,6 +27,7 @@ interface AttachmentType {
     url?: string;
     proxy_url?: string;
     filename?: string;
+    [key: string]: any;  // Allow extra props from Discord data
 }
 
 function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; filename: string }) {
@@ -120,17 +121,17 @@ async function scanAttachment(attachment: AttachmentType | null) {
     }
 }
 
-const patch: NavContextMenuPatchCallback = (data, menu) => {
+const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
     let attachment: AttachmentType | null = null;
 
-    // Common paths in Vencord/Discord menus
-    if (data.attachment) {
+    // Defensive extraction with type guard
+    if (data?.attachment) {
         attachment = data.attachment;
-    } else if (data.target?.props?.attachment) {
+    } else if (data?.target?.props?.attachment) {
         attachment = data.target.props.attachment;
-    } else if (data.message?.attachments?.length > 0) {
+    } else if (data?.message?.attachments?.[0]) {
         attachment = data.message.attachments[0];
-    } else if (data.target?.props?.message?.attachments?.length > 0) {
+    } else if (data?.target?.props?.message?.attachments?.[0]) {
         attachment = data.target.props.message.attachments[0];
     }
 
@@ -141,13 +142,12 @@ const patch: NavContextMenuPatchCallback = (data, menu) => {
 
     logger.debug("Found attachment:", attachment.filename || "unnamed");
 
-    // Ensure children is array (cast to any[] for TS)
-    let children = menu.props.children;
-    if (!Array.isArray(children)) {
-        children = children ? [children] : [];
-    }
+    // Force children to array (silences ReactElement[] error)
+    const children = Array.isArray(menu.props.children)
+        ? menu.props.children
+        : menu.props.children ? [menu.props.children] : [];
 
-    (children as any[]).push(
+    children.push(
         <Menu.MenuGroup key="virus-scan-group">
             <Menu.MenuItem
                 id="scan-for-viruses"

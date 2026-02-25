@@ -9,7 +9,6 @@ import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { Menu } from "@webpack/common";
 import { openModal } from "@utils/modal";
-import { showToast } from "@utils/notifications";  // ← Fixed import (toasts → notifications)
 import { Logger } from "@utils/Logger";
 
 const logger = new Logger("AttachmentVirusScanner");
@@ -27,7 +26,7 @@ interface AttachmentType {
     url?: string;
     proxy_url?: string;
     filename?: string;
-    [key: string]: any;  // Allow extra props from Discord data
+    [key: string]: any;
 }
 
 function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; filename: string }) {
@@ -72,18 +71,18 @@ async function scanAttachment(attachment: AttachmentType | null) {
 
     const apiKey = settings.store.virusTotalApiKey?.trim();
     if (!apiKey) {
-        showToast({ message: "VirusTotal API key missing – check settings", type: 2 });
+        console.log("VirusTotal API key missing – check settings");
         return;
     }
 
     const url = attachment.url || attachment.proxy_url;
     if (!url) {
-        showToast({ message: "Cannot access file URL", type: 2 });
+        console.log("Cannot access file URL");
         return;
     }
 
     try {
-        showToast({ message: "Scanning with VirusTotal...", type: 1 });
+        console.log("Scanning with VirusTotal...");
 
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
@@ -99,7 +98,7 @@ async function scanAttachment(attachment: AttachmentType | null) {
         });
 
         if (vtRes.status === 404) {
-            showToast({ message: "File unknown to VirusTotal (new file – treat with caution)", type: 1 });
+            console.log("File unknown to VirusTotal (new file – treat with caution)");
             return;
         }
 
@@ -117,32 +116,30 @@ async function scanAttachment(attachment: AttachmentType | null) {
 
     } catch (err: any) {
         logger.error("Scan failed:", err);
-        showToast({ message: `Scan error: ${err.message || "Unknown issue"}`, type: 2 });
+        console.log(`Scan error: ${err.message || "Unknown issue"}`);
     }
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
     let attachment: AttachmentType | null = null;
 
-    // Defensive extraction with type guard
-    if (data?.attachment) {
+    if ('attachment' in data && data.attachment) {
         attachment = data.attachment;
-    } else if (data?.target?.props?.attachment) {
+    } else if (data.target && 'props' in data.target && data.target.props?.attachment) {
         attachment = data.target.props.attachment;
-    } else if (data?.message?.attachments?.[0]) {
+    } else if ('message' in data && data.message?.attachments?.[0]) {
         attachment = data.message.attachments[0];
-    } else if (data?.target?.props?.message?.attachments?.[0]) {
+    } else if (data.target && 'props' in data.target && data.target.props?.message?.attachments?.[0]) {
         attachment = data.target.props.message.attachments[0];
     }
 
     if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("No valid attachment found in context data");
+        logger.debug("No valid attachment found");
         return;
     }
 
     logger.debug("Found attachment:", attachment.filename || "unnamed");
 
-    // Force children to array (silences ReactElement[] error)
     const children = Array.isArray(menu.props.children)
         ? menu.props.children
         : menu.props.children ? [menu.props.children] : [];

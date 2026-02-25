@@ -5,7 +5,7 @@
  */
 
 import { addContextMenuPatch, removeContextMenuPatch, NavContextMenuPatchCallback } from "@api/ContextMenu";
-import definePluginSettings from "@api/Settings";
+import { definePluginSettings } from "@api/Settings";  // ← Fixed: named import
 import definePlugin, { OptionType } from "@utils/types";
 import { Menu } from "@webpack/common";
 import { openModal } from "@utils/modal";
@@ -23,6 +23,12 @@ const settings = definePluginSettings({
     }
 });
 
+interface AttachmentType {
+    url?: string;
+    proxy_url?: string;
+    filename?: string;
+}
+
 function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; filename: string }) {
     const malicious = stats.malicious || 0;
     const suspicious = stats.suspicious || 0;
@@ -37,8 +43,8 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
             <h2 style={{ margin: "0 0 16px 0" }}>VirusTotal Scan — {filename}</h2>
             <div style={{ fontSize: "24px", fontWeight: "bold", color: verdict.color, marginBottom: "8px" }}>
                 {verdict.text}
-                </div>
-          <div style={{ marginBottom: "16px" }}>{verdict.sub}</div>
+            </div>
+            <div style={{ marginBottom: "16px" }}>{verdict.sub}</div>
 
             <div style={{ background: "#2f3136", padding: "12px", borderRadius: "6px", marginBottom: "16px" }}>
                 <div>Malicious: <b>{malicious}</b></div>
@@ -60,7 +66,9 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
     );
 }
 
-async function scanAttachment(attachment: any) {
+async function scanAttachment(attachment: AttachmentType | null) {
+    if (!attachment) return;
+
     const apiKey = settings.store.virusTotalApiKey?.trim();
     if (!apiKey) {
         showToast({ message: "VirusTotal API key missing – check settings", type: 2 });
@@ -113,34 +121,33 @@ async function scanAttachment(attachment: any) {
 }
 
 const patch: NavContextMenuPatchCallback = (data, menu) => {
-    let attachment = null;
+    let attachment: AttachmentType | null = null;
 
-    // Common paths in 2026 Vencord/Discord menus
+    // Common paths in Vencord/Discord menus
     if (data.attachment) {
         attachment = data.attachment;
     } else if (data.target?.props?.attachment) {
         attachment = data.target.props.attachment;
     } else if (data.message?.attachments?.length > 0) {
-        // Take first attachment if multiple (common case)
         attachment = data.message.attachments[0];
     } else if (data.target?.props?.message?.attachments?.length > 0) {
         attachment = data.target.props.message.attachments[0];
     }
 
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
+    if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
         logger.debug("No valid attachment found in context data");
         return;
     }
 
     logger.debug("Found attachment:", attachment.filename || "unnamed");
 
-    // Ensure children is array
+    // Ensure children is array (cast to any[] for TS)
     let children = menu.props.children;
     if (!Array.isArray(children)) {
         children = children ? [children] : [];
     }
 
-    children.push(
+    (children as any[]).push(
         <Menu.MenuGroup key="virus-scan-group">
             <Menu.MenuItem
                 id="scan-for-viruses"
@@ -165,9 +172,7 @@ export default definePlugin({
     settings,
 
     start() {
-        // Patch the most common menu for attachments (in messages)
         addContextMenuPatch("message", patch);
-        // Fallback for direct attachment menus if separate
         addContextMenuPatch("attachment", patch);
         logger.log("Plugin started – right-click attachments to scan");
     },

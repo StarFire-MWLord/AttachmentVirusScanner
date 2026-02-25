@@ -71,18 +71,18 @@ async function scanAttachment(attachment: AttachmentType | null) {
 
     const apiKey = settings.store.virusTotalApiKey?.trim();
     if (!apiKey) {
-        console.log("VirusTotal API key missing – check settings");
+        console.log("[AttachmentVirusScanner] API key missing – check settings");
         return;
     }
 
     const url = attachment.url || attachment.proxy_url;
     if (!url) {
-        console.log("Cannot access file URL");
+        console.log("[AttachmentVirusScanner] Cannot access file URL");
         return;
     }
 
     try {
-        console.log("Scanning with VirusTotal...");
+        console.log("[AttachmentVirusScanner] Scanning with VirusTotal...");
 
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
@@ -98,14 +98,11 @@ async function scanAttachment(attachment: AttachmentType | null) {
         });
 
         if (vtRes.status === 404) {
-            console.log("File unknown to VirusTotal (new file – treat with caution)");
+            console.log("[AttachmentVirusScanner] File unknown to VirusTotal (new file – treat with caution)");
             return;
         }
 
-        if (!vtRes.ok) {
-            const err = await vtRes.json().catch(() => ({}));
-            throw new Error(err?.error?.message || `VT API error (${vtRes.status})`);
-        }
+        if (!vtRes.ok) throw new Error(`VT API error (${vtRes.status})`);
 
         const data = await vtRes.json();
         const stats = data.data?.attributes?.last_analysis_stats ?? {};
@@ -116,34 +113,27 @@ async function scanAttachment(attachment: AttachmentType | null) {
 
     } catch (err: any) {
         logger.error("Scan failed:", err);
-        console.log(`Scan error: ${err.message || "Unknown issue"}`);
+        console.log(`[AttachmentVirusScanner] Scan error: ${err.message || "Unknown issue"}`);
     }
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
-    logger.debug("Context menu patch triggered with data:", JSON.stringify(Object.keys(data || {}), null, 2));  // Log keys to see what's available
+    logger.debug("[AttachmentVirusScanner] Menu triggered - type:", data?.type || "unknown", "keys:", Object.keys(data || {}));
 
     let attachment: AttachmentType | null = null;
 
-    // Expanded paths for 2026 Discord/Vencord
-    if ('attachment' in data && data.attachment) {
-        attachment = data.attachment;
-    } else if (data.target && data.target.props && data.target.props.attachment) {
-        attachment = data.target.props.attachment;
-    } else if ('message' in data && data.message && data.message.attachments && data.message.attachments[0]) {
-        attachment = data.message.attachments[0];
-    } else if (data.target && data.target.props && data.target.props.message && data.target.props.message.attachments && data.target.props.message.attachments[0]) {
-        attachment = data.target.props.message.attachments[0];
-    } else if (data.attachments && data.attachments[0]) {
-        attachment = data.attachments[0];
-    }
+    if (data?.attachment) attachment = data.attachment;
+    else if (data?.target?.props?.attachment) attachment = data.target.props.attachment;
+    else if (data?.message?.attachments?.[0]) attachment = data.message.attachments[0];
+    else if (data?.target?.props?.message?.attachments?.[0]) attachment = data.target.props.message.attachments[0];
+    else if (data?.attachments?.[0]) attachment = data.attachments[0];
 
-    if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("No valid attachment found in context data");
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
+        logger.debug("[AttachmentVirusScanner] No valid attachment in this menu");
         return;
     }
 
-    logger.debug("Found attachment:", attachment.filename || "unnamed", "URL:", attachment.url || attachment.proxy_url);
+    logger.debug("[AttachmentVirusScanner] FOUND ATTACHMENT:", attachment.filename || "unnamed");
 
     const children = Array.isArray(menu.props.children)
         ? menu.props.children
@@ -174,18 +164,22 @@ export default definePlugin({
     settings,
 
     start() {
-        addContextMenuPatch("message", patch);
+        // Most common types for attachments in 2026
         addContextMenuPatch("attachment", patch);
-        // Add more patch types for media/file previews
+        addContextMenuPatch("message", patch);
         addContextMenuPatch("media-actions", patch);
         addContextMenuPatch("attachment-actions", patch);
-        logger.log("Plugin started – context menu patches applied");
+        addContextMenuPatch("attachment-context", patch);
+        addContextMenuPatch("media-item", patch);
+        logger.log("Plugin started – all context menu patches applied");
     },
 
     stop() {
-        removeContextMenuPatch("message", patch);
         removeContextMenuPatch("attachment", patch);
+        removeContextMenuPatch("message", patch);
         removeContextMenuPatch("media-actions", patch);
         removeContextMenuPatch("attachment-actions", patch);
+        removeContextMenuPatch("attachment-context", patch);
+        removeContextMenuPatch("media-item", patch);
     }
 });

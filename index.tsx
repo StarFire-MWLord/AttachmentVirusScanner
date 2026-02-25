@@ -1,6 +1,6 @@
 /*
  * AttachmentVirusScanner - Custom Vencord Plugin
- * Right-click a message (the menu with Edit, Reply, Copy, Pin, etc.) → "Scan for Viruses" if it has a file
+ * Right-click any message that has a file → "Scan for Viruses" (VirusTotal)
  * Authors: StarFire & MW-Lord
  */
 
@@ -118,28 +118,16 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
-    logger.debug("[AttachmentVirusScanner] Message menu triggered - keys:", Object.keys(data || {}));
+    // Only care about messages that have attachments
+    let attachment = data?.message?.attachments?.[0] 
+                  || data?.target?.props?.message?.attachments?.[0];
 
-    let attachment: AttachmentType | null = null;
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
 
-    // Primary paths for message right-click (most reliable)
-    if (data?.message?.attachments?.[0]) {
-        attachment = data.message.attachments[0];
-    } else if (data?.target?.props?.message?.attachments?.[0]) {
-        attachment = data.target.props.message.attachments[0];
-    } else if (data?.message?.attachments && data.message.attachments.length > 0) {
-        attachment = data.message.attachments[0]; // first file if multiple
-    }
+    logger.debug("[AttachmentVirusScanner] FOUND FILE in message menu:", attachment.filename);
 
-    if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("[AttachmentVirusScanner] No attachment in this message menu");
-        return;
-    }
-
-    logger.debug("[AttachmentVirusScanner] FOUND ATTACHMENT in message menu:", attachment.filename || "unnamed");
-
-    const children = Array.isArray(menu.props.children)
-        ? menu.props.children
+    const children = Array.isArray(menu.props.children) 
+        ? menu.props.children 
         : menu.props.children ? [menu.props.children] : [];
 
     children.push(
@@ -158,7 +146,7 @@ const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click messages → Scan for Viruses if they have attachments",
+    description: "Right-click any message with a file → Scan for Viruses (VirusTotal)",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -167,9 +155,8 @@ export default definePlugin({
     settings,
 
     start() {
-        // Only patch the message menu (the one with Edit, Reply, Copy, Pin, etc.)
         addContextMenuPatch("message", patch);
-        logger.log("Plugin started – message context menu patched");
+        logger.log("Plugin started – message menu patched");
     },
 
     stop() {

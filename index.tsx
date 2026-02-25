@@ -1,6 +1,6 @@
 /*
  * AttachmentVirusScanner - Custom Vencord Plugin
- * Right-click any file attachment → "Scan for Viruses" (VirusTotal)
+ * Right-click a message (the menu with Edit, Reply, Copy, Pin, etc.) → "Scan for Viruses" if it has a file
  * Authors: StarFire & MW-Lord
  */
 
@@ -118,22 +118,25 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
-    logger.debug("[AttachmentVirusScanner] Menu triggered - type:", data?.type || "unknown", "keys:", Object.keys(data || {}));
+    logger.debug("[AttachmentVirusScanner] Message menu triggered - keys:", Object.keys(data || {}));
 
     let attachment: AttachmentType | null = null;
 
-    if (data?.attachment) attachment = data.attachment;
-    else if (data?.target?.props?.attachment) attachment = data.target.props.attachment;
-    else if (data?.message?.attachments?.[0]) attachment = data.message.attachments[0];
-    else if (data?.target?.props?.message?.attachments?.[0]) attachment = data.target.props.message.attachments[0];
-    else if (data?.attachments?.[0]) attachment = data.attachments[0];
+    // Primary paths for message right-click (most reliable)
+    if (data?.message?.attachments?.[0]) {
+        attachment = data.message.attachments[0];
+    } else if (data?.target?.props?.message?.attachments?.[0]) {
+        attachment = data.target.props.message.attachments[0];
+    } else if (data?.message?.attachments && data.message.attachments.length > 0) {
+        attachment = data.message.attachments[0]; // first file if multiple
+    }
 
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("[AttachmentVirusScanner] No valid attachment in this menu");
+    if (!attachment || typeof attachment !== 'object' || (!attachment.url && !attachment.proxy_url)) {
+        logger.debug("[AttachmentVirusScanner] No attachment in this message menu");
         return;
     }
 
-    logger.debug("[AttachmentVirusScanner] FOUND ATTACHMENT:", attachment.filename || "unnamed");
+    logger.debug("[AttachmentVirusScanner] FOUND ATTACHMENT in message menu:", attachment.filename || "unnamed");
 
     const children = Array.isArray(menu.props.children)
         ? menu.props.children
@@ -155,7 +158,7 @@ const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click attachments → Scan for Viruses (VirusTotal)",
+    description: "Right-click messages → Scan for Viruses if they have attachments",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -164,22 +167,12 @@ export default definePlugin({
     settings,
 
     start() {
-        // Most common types for attachments in 2026
-        addContextMenuPatch("attachment", patch);
+        // Only patch the message menu (the one with Edit, Reply, Copy, Pin, etc.)
         addContextMenuPatch("message", patch);
-        addContextMenuPatch("media-actions", patch);
-        addContextMenuPatch("attachment-actions", patch);
-        addContextMenuPatch("attachment-context", patch);
-        addContextMenuPatch("media-item", patch);
-        logger.log("Plugin started – all context menu patches applied");
+        logger.log("Plugin started – message context menu patched");
     },
 
     stop() {
-        removeContextMenuPatch("attachment", patch);
         removeContextMenuPatch("message", patch);
-        removeContextMenuPatch("media-actions", patch);
-        removeContextMenuPatch("attachment-actions", patch);
-        removeContextMenuPatch("attachment-context", patch);
-        removeContextMenuPatch("media-item", patch);
     }
 });

@@ -5,6 +5,12 @@
  */
 
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
+import { NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { Margins } from "@utils/margins";
+import { closeModal, ModalCloseButton, ModalContent, ModalFooter, ModalHeader, ModalRoot, ModalSize, openModal } from "@utils/modal";
+import definePlugin, { IconComponent, OptionType } from "@utils/types";
+import { Message } from "@vencord/discord-types";
+import { Button, ChannelStore, Forms, GuildRoleStore, Menu, Text } from "@webpack/common";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { Menu } from "@webpack/common";

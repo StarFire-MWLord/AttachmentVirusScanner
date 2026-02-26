@@ -1,6 +1,6 @@
 /*
  * AttachmentVirusScanner - FORCE BUTTON ON EVERY MESSAGE
- * "Scan File" appears on every single message right-click menu (Reply/Pin/Copy ID/etc.)
+ * "Scan File" appears on EVERY message right-click menu (Reply/Pin/Copy ID/etc.)
  * Authors: StarFire & MW-Lord
  */
 
@@ -62,7 +62,7 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
 
 async function scanAttachment(attachment: AttachmentType | null) {
     if (!attachment || (!attachment.url && !attachment.proxy_url)) {
-        console.log("[Scan File] No file attached to this message");
+        console.log("[Scan File] No file attached");
         return;
     }
 
@@ -96,7 +96,7 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch = (data: any, menu: any) => {
-    console.log("[Scan File] Message menu opened - adding button");
+    console.log("[Scan File] Menu opened - adding Scan File button");
 
     const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
 
@@ -127,11 +127,15 @@ export default definePlugin({
     settings,
 
     start() {
-        addContextMenuPatch("message", patch);
-        console.log("[Scan File] Plugin started - button forced on all messages");
+        // Patch ALL possible message menu types Discord uses in 2026
+        const types = ["message", "message-context", "guild-message", "dm-message", "chat-message"];
+        types.forEach(type => addContextMenuPatch(type as any, patch));
+
+        console.log("[Scan File] Plugin started - button forced on ALL messages");
     },
 
     stop() {
-        removeContextMenuPatch("message", patch);
+        const types = ["message", "message-context", "guild-message", "dm-message", "chat-message"];
+        types.forEach(type => removeContextMenuPatch(type as any, patch));
     }
 });

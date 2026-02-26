@@ -1,6 +1,6 @@
 /*
  * AttachmentVirusScanner - Custom Vencord Plugin
- * Right-click any message that has a file → "Scan for Viruses" (in the normal Edit/Reply/Pin menu)
+ * Right-click any message (the full bubble/text area) → "Scan for Viruses" in Edit/Reply/Pin menu if message has file
  * Authors: StarFire & MW-Lord
  */
 
@@ -79,7 +79,7 @@ async function scanAttachment(attachment: AttachmentType | null) {
     if (!url) return;
 
     try {
-        console.log("[AttachmentVirusScanner] Scanning file...");
+        console.log("[AttachmentVirusScanner] Scanning...");
 
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("Download failed");
@@ -109,20 +109,28 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
-    // Look for attachment in the message context menu
+    logger.debug("[AttachmentVirusScanner] Message menu opened - keys:", Object.keys(data || {}));
+
+    // Find attachment in message right-click data
     let attachment = data?.message?.attachments?.[0] 
-                  || data?.target?.props?.message?.attachments?.[0];
+                  || data?.target?.props?.message?.attachments?.[0]
+                  || data?.message?.firstAttachment  // some versions use this
+                  || (data?.message?.attachments?.length > 0 ? data.message.attachments[0] : null);
 
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
+        logger.debug("[AttachmentVirusScanner] No file in this message");
+        return;
+    }
 
-    logger.debug("[AttachmentVirusScanner] FOUND FILE – adding button");
+    logger.debug("[AttachmentVirusScanner] FOUND FILE - adding Scan button:", attachment.filename || "unnamed");
 
     const children = Array.isArray(menu.props.children) 
         ? menu.props.children 
         : menu.props.children ? [menu.props.children] : [];
 
+    // Insert in the main section (near Pin, Mark Unread, etc.)
     children.push(
-        <Menu.MenuGroup key="virus-scan-group">
+        <Menu.MenuGroup key="virus-scan">
             <Menu.MenuItem
                 id="scan-for-viruses"
                 label="Scan for Viruses"
@@ -137,7 +145,7 @@ const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click any message with a file → Scan for Viruses (in Edit/Reply/Pin menu)",
+    description: "Right-click any message with a file → Scan for Viruses in the normal menu",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -146,11 +154,14 @@ export default definePlugin({
     settings,
 
     start() {
-        addContextMenuPatch("message", patch);   // Only the message menu you want
-        logger.log("Plugin started – ready for message right-click");
+        // Target the standard message right-click menu
+        addContextMenuPatch("message", patch);
+        addContextMenuPatch("message-context", patch);  // extra fallback for some versions
+        logger.log("Plugin started – patching message right-click menu");
     },
 
     stop() {
         removeContextMenuPatch("message", patch);
+        removeContextMenuPatch("message-context", patch);
     }
 });

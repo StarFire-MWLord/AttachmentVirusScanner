@@ -1,7 +1,7 @@
 /*
- * AttachmentVirusScanner - ULTIMATE FORCE VERSION
- * "Scan File" on EVERY message right-click menu (the one with Reply, Pin, Copy ID, etc.)
- * Authors: StarFire & MW-Lord
+ * AttachmentVirusScanner - FIXED & FORCED VERSION
+ * "Scan File" appears on EVERY message right-click menu
+ * No more crash, no more "corrupted"
  */
 
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
@@ -98,9 +98,14 @@ async function scanAttachment(attachment: AttachmentType | null) {
 const patch = (data: any, menu: any) => {
     console.log("[Scan File] Menu opened - forcing Scan File button");
 
+    // SAFE CHECK - this fixes the "undefined (reading 'children')" error
+    if (!menu || !menu.props) return;
+
     const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
 
-    const children = Array.isArray(menu.props.children) ? menu.props.children : menu.props.children ? [menu.props.children] : [];
+    const children = Array.isArray(menu.props.children) 
+        ? menu.props.children 
+        : menu.props.children ? [menu.props.children] : [];
 
     children.push(
         <Menu.MenuGroup key="scan-group">
@@ -127,16 +132,11 @@ export default definePlugin({
     settings,
 
     start() {
-        // Patch every possible message menu type
-        ["message", "message-context", "guild-message", "dm-message", "chat-message", "message-actions"].forEach(type => {
-            addContextMenuPatch(type as any, patch);
-        });
-        console.log("[Scan File] Plugin started - button forced on ALL messages");
+        addContextMenuPatch("message", patch);
+        console.log("[Scan File] Plugin started - button forced on all messages");
     },
 
     stop() {
-        ["message", "message-context", "guild-message", "dm-message", "chat-message", "message-actions"].forEach(type => {
-            removeContextMenuPatch(type as any, patch);
-        });
+        removeContextMenuPatch("message", patch);
     }
 });

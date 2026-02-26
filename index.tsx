@@ -80,8 +80,9 @@ async function scanAttachment(attachment: AttachmentType | null) {
     try {
         console.log("[Scan File] Scanning...");
 
-        // FIX: add Discord authorization header so private attachments can be downloaded
-        const token = localStorage.getItem("token")?.replace(/"/g, "") || "";
+        // ONLY LINE THAT WAS CHANGED — now uses window.localStorage so it never says "not identified"
+        const token = (window as any).localStorage.getItem("token")?.replace(/"/g, "") || "";
+
         const res = await fetch(url, { 
             cache: "no-store",
             headers: { Authorization: token }

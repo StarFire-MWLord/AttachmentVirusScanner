@@ -1,6 +1,6 @@
 /*
- * AttachmentVirusScanner - FORCE BUTTON ON EVERY MESSAGE
- * "Scan File" appears on EVERY message right-click menu (Reply/Pin/Copy ID/etc.)
+ * AttachmentVirusScanner - ULTIMATE FORCE VERSION
+ * "Scan File" on EVERY message right-click menu (the one with Reply, Pin, Copy ID, etc.)
  * Authors: StarFire & MW-Lord
  */
 
@@ -62,7 +62,7 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
 
 async function scanAttachment(attachment: AttachmentType | null) {
     if (!attachment || (!attachment.url && !attachment.proxy_url)) {
-        console.log("[Scan File] No file attached");
+        console.log("[Scan File] No file in this message");
         return;
     }
 
@@ -72,7 +72,7 @@ async function scanAttachment(attachment: AttachmentType | null) {
     const url = attachment.url || attachment.proxy_url;
 
     try {
-        console.log("[Scan File] Scanning...");
+        console.log("[Scan File] Scanning file...");
 
         const res = await fetch(url, { cache: "no-store" });
         const blob = await res.blob();
@@ -90,13 +90,13 @@ async function scanAttachment(attachment: AttachmentType | null) {
 
         openModal(props => <ScanResultModal stats={stats} hash={hashHex} filename={attachment.filename || "File"} {...props} />);
 
-    } catch (e) {
+    } catch (e: any) {
         console.log("[Scan File] Error:", e.message);
     }
 }
 
 const patch = (data: any, menu: any) => {
-    console.log("[Scan File] Menu opened - adding Scan File button");
+    console.log("[Scan File] Menu opened - forcing Scan File button");
 
     const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
 
@@ -127,15 +127,16 @@ export default definePlugin({
     settings,
 
     start() {
-        // Patch ALL possible message menu types Discord uses in 2026
-        const types = ["message", "message-context", "guild-message", "dm-message", "chat-message"];
-        types.forEach(type => addContextMenuPatch(type as any, patch));
-
+        // Patch every possible message menu type
+        ["message", "message-context", "guild-message", "dm-message", "chat-message", "message-actions"].forEach(type => {
+            addContextMenuPatch(type as any, patch);
+        });
         console.log("[Scan File] Plugin started - button forced on ALL messages");
     },
 
     stop() {
-        const types = ["message", "message-context", "guild-message", "dm-message", "chat-message"];
-        types.forEach(type => removeContextMenuPatch(type as any, patch));
+        ["message", "message-context", "guild-message", "dm-message", "chat-message", "message-actions"].forEach(type => {
+            removeContextMenuPatch(type as any, patch);
+        });
     }
 });

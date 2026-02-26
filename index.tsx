@@ -1,6 +1,6 @@
 /*
- * AttachmentVirusScanner - Final Version
- * Right-click any message (the normal menu with Reply/Pin/Copy ID) → "Scan File" if it has an attachment
+ * AttachmentVirusScanner - Force Button Version
+ * "Scan File" appears on EVERY message right-click menu (Reply/Pin/Copy ID/etc.)
  * Authors: StarFire & MW-Lord
  */
 
@@ -60,17 +60,26 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
     );
 }
 
-async function scanAttachment(attachment: AttachmentType) {
+async function scanAttachment(attachment: AttachmentType | null) {
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
+        console.log("[Scan File] No file in this message");
+        return;
+    }
+
     const apiKey = settings.store.virusTotalApiKey?.trim();
-    if (!apiKey) return console.log("[Scan File] API key missing");
+    if (!apiKey) {
+        console.log("[Scan File] API key missing – check settings");
+        return;
+    }
 
     const url = attachment.url || attachment.proxy_url;
-    if (!url) return;
 
     try {
         console.log("[Scan File] Scanning...");
 
         const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("Download failed");
+
         const blob = await res.blob();
         const buffer = await blob.arrayBuffer();
 
@@ -81,7 +90,14 @@ async function scanAttachment(attachment: AttachmentType) {
             headers: { "x-apikey": apiKey }
         });
 
-        const data = await vtRes.json().catch(() => ({}));
+        if (vtRes.status === 404) {
+            console.log("[Scan File] File not in VirusTotal yet");
+            return;
+        }
+
+        if (!vtRes.ok) throw new Error("VirusTotal error");
+
+        const data = await vtRes.json();
         const stats = data.data?.attributes?.last_analysis_stats ?? {};
 
         openModal(props => <ScanResultModal stats={stats} hash={hashHex} filename={attachment.filename || "File"} {...props} />);
@@ -92,19 +108,23 @@ async function scanAttachment(attachment: AttachmentType) {
 }
 
 const patch = (data: any, menu: any) => {
-    const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
+    // Log every message menu open to confirm it's triggering
+    console.log("[Scan File] Message menu opened - checking for file...");
 
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
+    // Get attachment if present (first one only)
+    const attachment = data?.message?.attachments?.[0] 
+                    || data?.target?.props?.message?.attachments?.[0];
 
-    console.log("[Scan File] Found file - adding button");
-
-    const children = Array.isArray(menu.props.children) ? menu.props.children : menu.props.children ? [menu.props.children] : [];
+    // Always add the button - no condition
+    const children = Array.isArray(menu.props.children) 
+        ? menu.props.children 
+        : menu.props.children ? [menu.props.children] : [];
 
     children.push(
         <Menu.MenuGroup key="scan-group">
             <Menu.MenuItem
                 id="scan-virus"
-                label="Scan File"
+                label={attachment ? "Scan File" : "Scan File (no file)"}
                 icon={() => <span style={{ fontSize: "1.2em" }}>🛡️</span>}
                 action={() => scanAttachment(attachment)}
             />
@@ -112,11 +132,13 @@ const patch = (data: any, menu: any) => {
     );
 
     menu.props.children = children;
+
+    console.log("[Scan File] Button added to menu");
 };
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click message → Scan File (in Reply/Pin/Copy menu)",
+    description: "Scan File button on every message right-click menu",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -126,7 +148,7 @@ export default definePlugin({
 
     start() {
         addContextMenuPatch("message", patch);
-        logger.log("Plugin ready - right-click any message with a file");
+        console.log("[Scan File] Plugin started - button forced on all messages");
     },
 
     stop() {

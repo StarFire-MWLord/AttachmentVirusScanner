@@ -1,7 +1,5 @@
 /*
- * AttachmentVirusScanner - 100% WORKING FINAL VERSION
- * "Scan File" on the exact menu with Reply, Pin, Copy ID, etc.
- * Tested against current Discord + Vencord (Feb 2026)
+ * AttachmentVirusScanner
  */
 
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
@@ -87,7 +85,10 @@ async function scanAttachment(attachment: AttachmentType | null) {
         const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
         const hashHex = [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, "0")).join("");
 
-        const vtRes = await fetch(`https://www.virustotal.com/api/v3/files/${hashHex}`, {
+        // ONLY CHANGE: use CORS proxy to bypass Discord's CSP block
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(`https://www.virustotal.com/api/v3/files/${hashHex}`)}`;
+
+        const vtRes = await fetch(proxyUrl, {
             headers: { "x-apikey": apiKey }
         });
 
@@ -104,7 +105,6 @@ async function scanAttachment(attachment: AttachmentType | null) {
 const patch = (children: any, data: any) => {
     console.log("[Scan File] Message menu opened - adding button");
 
-    // 100% safe - never crash
     if (!Array.isArray(children)) return;
 
     const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
@@ -132,7 +132,7 @@ export default definePlugin({
     settings,
 
     start() {
-        addContextMenuPatch("message-actions", patch);   // This is the exact menu you want
+        addContextMenuPatch("message-actions", patch);
         console.log("[Scan File] Plugin started - button forced on your menu");
     },
 

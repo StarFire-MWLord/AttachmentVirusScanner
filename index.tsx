@@ -1,6 +1,6 @@
 /*
- * AttachmentVirusScanner - Force Button Version
- * "Scan File" appears on EVERY message right-click menu (Reply/Pin/Copy ID/etc.)
+ * AttachmentVirusScanner - FORCE BUTTON ON EVERY MESSAGE
+ * "Scan File" appears on every single message right-click menu (Reply/Pin/Copy ID/etc.)
  * Authors: StarFire & MW-Lord
  */
 
@@ -62,15 +62,12 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
 
 async function scanAttachment(attachment: AttachmentType | null) {
     if (!attachment || (!attachment.url && !attachment.proxy_url)) {
-        console.log("[Scan File] No file in this message");
+        console.log("[Scan File] No file attached to this message");
         return;
     }
 
     const apiKey = settings.store.virusTotalApiKey?.trim();
-    if (!apiKey) {
-        console.log("[Scan File] API key missing – check settings");
-        return;
-    }
+    if (!apiKey) return console.log("[Scan File] API key missing");
 
     const url = attachment.url || attachment.proxy_url;
 
@@ -78,8 +75,6 @@ async function scanAttachment(attachment: AttachmentType | null) {
         console.log("[Scan File] Scanning...");
 
         const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("Download failed");
-
         const blob = await res.blob();
         const buffer = await blob.arrayBuffer();
 
@@ -90,14 +85,7 @@ async function scanAttachment(attachment: AttachmentType | null) {
             headers: { "x-apikey": apiKey }
         });
 
-        if (vtRes.status === 404) {
-            console.log("[Scan File] File not in VirusTotal yet");
-            return;
-        }
-
-        if (!vtRes.ok) throw new Error("VirusTotal error");
-
-        const data = await vtRes.json();
+        const data = await vtRes.json().catch(() => ({}));
         const stats = data.data?.attributes?.last_analysis_stats ?? {};
 
         openModal(props => <ScanResultModal stats={stats} hash={hashHex} filename={attachment.filename || "File"} {...props} />);
@@ -108,23 +96,17 @@ async function scanAttachment(attachment: AttachmentType | null) {
 }
 
 const patch = (data: any, menu: any) => {
-    // Log every message menu open to confirm it's triggering
-    console.log("[Scan File] Message menu opened - checking for file...");
+    console.log("[Scan File] Message menu opened - adding button");
 
-    // Get attachment if present (first one only)
-    const attachment = data?.message?.attachments?.[0] 
-                    || data?.target?.props?.message?.attachments?.[0];
+    const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
 
-    // Always add the button - no condition
-    const children = Array.isArray(menu.props.children) 
-        ? menu.props.children 
-        : menu.props.children ? [menu.props.children] : [];
+    const children = Array.isArray(menu.props.children) ? menu.props.children : menu.props.children ? [menu.props.children] : [];
 
     children.push(
         <Menu.MenuGroup key="scan-group">
             <Menu.MenuItem
                 id="scan-virus"
-                label={attachment ? "Scan File" : "Scan File (no file)"}
+                label="Scan File"
                 icon={() => <span style={{ fontSize: "1.2em" }}>🛡️</span>}
                 action={() => scanAttachment(attachment)}
             />
@@ -132,13 +114,11 @@ const patch = (data: any, menu: any) => {
     );
 
     menu.props.children = children;
-
-    console.log("[Scan File] Button added to menu");
 };
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Scan File button on every message right-click menu",
+    description: "Scan File button on EVERY message right-click menu",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }

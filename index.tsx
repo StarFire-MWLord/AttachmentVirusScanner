@@ -80,12 +80,14 @@ async function scanAttachment(attachment: AttachmentType | null) {
     try {
         console.log("[Scan File] Scanning...");
 
-        // ONLY LINE THAT WAS CHANGED — now uses window.localStorage so it never says "not identified"
-        const token = (window as any).localStorage.getItem("token")?.replace(/"/g, "") || "";
+        let token = "";
+        try {
+            token = localStorage.getItem("token")?.replace(/"/g, "") || "";
+        } catch (e) {}
 
         const res = await fetch(url, { 
             cache: "no-store",
-            headers: { Authorization: token }
+            headers: token ? { Authorization: token } : {}
         });
 
         const blob = await res.blob();

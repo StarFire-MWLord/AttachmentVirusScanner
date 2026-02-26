@@ -1,6 +1,6 @@
 /*
- * AttachmentVirusScanner - Custom Vencord Plugin
- * Right-click any message (Reply/Pin/Copy menu) → "Scan File" if it has an attachment
+ * AttachmentVirusScanner - Final Version
+ * Right-click any message (the normal menu with Reply/Pin/Copy ID) → "Scan File" if it has an attachment
  * Authors: StarFire & MW-Lord
  */
 
@@ -53,35 +53,24 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
                 <div style={{ marginTop: "8px" }}>Total engines: <b>{total}</b></div>
             </div>
 
-            <a
-                href={`https://www.virustotal.com/gui/file/${hash}/detection`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#00b0f4", textDecoration: "underline" }}
-            >
+            <a href={`https://www.virustotal.com/gui/file/${hash}/detection`} target="_blank" rel="noopener noreferrer" style={{ color: "#00b0f4", textDecoration: "underline" }}>
                 Full report on VirusTotal →
             </a>
         </div>
     );
 }
 
-async function scanAttachment(attachment: AttachmentType | null) {
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
-
+async function scanAttachment(attachment: AttachmentType) {
     const apiKey = settings.store.virusTotalApiKey?.trim();
-    if (!apiKey) {
-        console.log("[Scan File] API key missing – check settings");
-        return;
-    }
+    if (!apiKey) return console.log("[Scan File] API key missing");
 
     const url = attachment.url || attachment.proxy_url;
+    if (!url) return;
 
     try {
-        console.log("[Scan File] Starting scan...");
+        console.log("[Scan File] Scanning...");
 
         const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("Download failed");
-
         const blob = await res.blob();
         const buffer = await blob.arrayBuffer();
 
@@ -92,40 +81,27 @@ async function scanAttachment(attachment: AttachmentType | null) {
             headers: { "x-apikey": apiKey }
         });
 
-        if (vtRes.status === 404) {
-            console.log("[Scan File] File not in VirusTotal yet (new file)");
-            return;
-        }
-
-        if (!vtRes.ok) throw new Error("VirusTotal error");
-
-        const data = await vtRes.json();
+        const data = await vtRes.json().catch(() => ({}));
         const stats = data.data?.attributes?.last_analysis_stats ?? {};
 
-        openModal(props => (
-            <ScanResultModal stats={stats} hash={hashHex} filename={attachment.filename || "File"} {...props} />
-        ));
+        openModal(props => <ScanResultModal stats={stats} hash={hashHex} filename={attachment.filename || "File"} {...props} />);
 
-    } catch (err: any) {
-        console.log("[Scan File] Error:", err.message || "Unknown");
+    } catch (e) {
+        console.log("[Scan File] Error:", e.message);
     }
 }
 
 const patch = (data: any, menu: any) => {
-    // Only look in the standard message menu data
-    let attachment = data?.message?.attachments?.[0] 
-                  || data?.target?.props?.message?.attachments?.[0];
+    const attachment = data?.message?.attachments?.[0] || data?.target?.props?.message?.attachments?.[0];
 
     if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
 
-    console.log("[Scan File] Found file in message menu:", attachment.filename);
+    console.log("[Scan File] Found file - adding button");
 
-    const children = Array.isArray(menu.props.children) 
-        ? menu.props.children 
-        : menu.props.children ? [menu.props.children] : [];
+    const children = Array.isArray(menu.props.children) ? menu.props.children : menu.props.children ? [menu.props.children] : [];
 
     children.push(
-        <Menu.MenuGroup key="scan-virus">
+        <Menu.MenuGroup key="scan-group">
             <Menu.MenuItem
                 id="scan-virus"
                 label="Scan File"
@@ -140,7 +116,7 @@ const patch = (data: any, menu: any) => {
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click messages → Scan File (VirusTotal) in Reply/Pin menu",
+    description: "Right-click message → Scan File (in Reply/Pin/Copy menu)",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -150,7 +126,7 @@ export default definePlugin({
 
     start() {
         addContextMenuPatch("message", patch);
-        console.log("[Scan File] Plugin started – message menu ready");
+        logger.log("Plugin ready - right-click any message with a file");
     },
 
     stop() {

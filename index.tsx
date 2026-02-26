@@ -1,10 +1,10 @@
 /*
  * AttachmentVirusScanner - Custom Vencord Plugin
- * Right-click any message (the full bubble/text area) → "Scan for Viruses" in Edit/Reply/Pin menu if message has file
+ * Right-click any message (Reply/Pin/Copy menu) → "Scan File" if it has an attachment
  * Authors: StarFire & MW-Lord
  */
 
-import { addContextMenuPatch, removeContextMenuPatch, NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType } from "@utils/types";
 import { Menu } from "@webpack/common";
@@ -26,7 +26,6 @@ interface AttachmentType {
     url?: string;
     proxy_url?: string;
     filename?: string;
-    [key: string]: any;
 }
 
 function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; filename: string }) {
@@ -67,19 +66,18 @@ function ScanResultModal({ stats, hash, filename }: { stats: any; hash: string; 
 }
 
 async function scanAttachment(attachment: AttachmentType | null) {
-    if (!attachment) return;
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
 
     const apiKey = settings.store.virusTotalApiKey?.trim();
     if (!apiKey) {
-        console.log("[AttachmentVirusScanner] API key missing – check settings");
+        console.log("[Scan File] API key missing – check settings");
         return;
     }
 
     const url = attachment.url || attachment.proxy_url;
-    if (!url) return;
 
     try {
-        console.log("[AttachmentVirusScanner] Scanning...");
+        console.log("[Scan File] Starting scan...");
 
         const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("Download failed");
@@ -94,9 +92,14 @@ async function scanAttachment(attachment: AttachmentType | null) {
             headers: { "x-apikey": apiKey }
         });
 
-        if (!vtRes.ok && vtRes.status !== 404) throw new Error("VirusTotal error");
+        if (vtRes.status === 404) {
+            console.log("[Scan File] File not in VirusTotal yet (new file)");
+            return;
+        }
 
-        const data = await vtRes.json().catch(() => ({}));
+        if (!vtRes.ok) throw new Error("VirusTotal error");
+
+        const data = await vtRes.json();
         const stats = data.data?.attributes?.last_analysis_stats ?? {};
 
         openModal(props => (
@@ -104,36 +107,28 @@ async function scanAttachment(attachment: AttachmentType | null) {
         ));
 
     } catch (err: any) {
-        console.log(`[AttachmentVirusScanner] Error: ${err.message}`);
+        console.log("[Scan File] Error:", err.message || "Unknown");
     }
 }
 
-const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
-    logger.debug("[AttachmentVirusScanner] Message menu opened - keys:", Object.keys(data || {}));
-
-    // Find attachment in message right-click data
+const patch = (data: any, menu: any) => {
+    // Only look in the standard message menu data
     let attachment = data?.message?.attachments?.[0] 
-                  || data?.target?.props?.message?.attachments?.[0]
-                  || data?.message?.firstAttachment  // some versions use this
-                  || (data?.message?.attachments?.length > 0 ? data.message.attachments[0] : null);
+                  || data?.target?.props?.message?.attachments?.[0];
 
-    if (!attachment || (!attachment.url && !attachment.proxy_url)) {
-        logger.debug("[AttachmentVirusScanner] No file in this message");
-        return;
-    }
+    if (!attachment || (!attachment.url && !attachment.proxy_url)) return;
 
-    logger.debug("[AttachmentVirusScanner] FOUND FILE - adding Scan button:", attachment.filename || "unnamed");
+    console.log("[Scan File] Found file in message menu:", attachment.filename);
 
     const children = Array.isArray(menu.props.children) 
         ? menu.props.children 
         : menu.props.children ? [menu.props.children] : [];
 
-    // Insert in the main section (near Pin, Mark Unread, etc.)
     children.push(
-        <Menu.MenuGroup key="virus-scan">
+        <Menu.MenuGroup key="scan-virus">
             <Menu.MenuItem
-                id="scan-for-viruses"
-                label="Scan for Viruses"
+                id="scan-virus"
+                label="Scan File"
                 icon={() => <span style={{ fontSize: "1.2em" }}>🛡️</span>}
                 action={() => scanAttachment(attachment)}
             />
@@ -145,7 +140,7 @@ const patch: NavContextMenuPatchCallback = (data: any, menu: any) => {
 
 export default definePlugin({
     name: "AttachmentVirusScanner",
-    description: "Right-click any message with a file → Scan for Viruses in the normal menu",
+    description: "Right-click messages → Scan File (VirusTotal) in Reply/Pin menu",
     authors: [
         { name: "StarFire", id: 1297220734875340840n },
         { name: "MW-Lord", id: 1328096083628523523n }
@@ -154,14 +149,11 @@ export default definePlugin({
     settings,
 
     start() {
-        // Target the standard message right-click menu
         addContextMenuPatch("message", patch);
-        addContextMenuPatch("message-context", patch);  // extra fallback for some versions
-        logger.log("Plugin started – patching message right-click menu");
+        console.log("[Scan File] Plugin started – message menu ready");
     },
 
     stop() {
         removeContextMenuPatch("message", patch);
-        removeContextMenuPatch("message-context", patch);
     }
 });

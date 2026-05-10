@@ -4,7 +4,7 @@
 
 ## Installation guide
 
-## Can be found on [How Io Install StarFiresPaidVoiceModerationSystem](https://youtu.be/1zRfheLASv0)
+## Can be found on [How To Install StarFiresPaidVoiceModerationSystem](https://youtu.be/1zRfheLASv0)
 
 ## *****************************************************
 ##  COPYRIGHT (C) 2025 STARFIREVR STUDIOS. ALL RIGHTS RESERVED.
